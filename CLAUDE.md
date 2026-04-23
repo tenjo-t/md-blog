@@ -35,3 +35,5 @@ pnpm tauri dev
 # build (single binary)
 pnpm tauri build
 ```
+
+Tauriのパーミッションに注意。

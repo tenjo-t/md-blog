@@ -12,6 +12,7 @@
 
   let container: HTMLDivElement;
   let view: EditorView;
+  let suppressChange = false;
 
   onMount(() => {
     view = new EditorView({
@@ -26,7 +27,7 @@
           oneDark,
           keymap.of([...defaultKeymap, ...historyKeymap]),
           EditorView.updateListener.of((update) => {
-            if (update.docChanged) {
+            if (update.docChanged && !suppressChange) {
               content = update.state.doc.toString();
               onchange?.(content);
             }
@@ -46,9 +47,11 @@
 
   $effect(() => {
     if (view && content !== view.state.doc.toString()) {
+      suppressChange = true;
       view.dispatch({
         changes: { from: 0, to: view.state.doc.length, insert: content },
       });
+      suppressChange = false;
     }
   });
 </script>

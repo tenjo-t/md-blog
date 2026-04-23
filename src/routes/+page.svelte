@@ -1,6 +1,8 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { ask } from "@tauri-apps/plugin-dialog";
   import { unified } from "unified";
   import remarkParse from "remark-parse";
   import remarkRehype from "remark-rehype";
@@ -14,6 +16,14 @@
   let markdown = $state("");
   let html = $state("");
   let activeTab = $state<Tab>("editor");
+  let isDirty = $state(false);
+
+  const appWindow = getCurrentWindow();
+
+  $effect(() => {
+    const base = fileName ?? "md-blog";
+    appWindow.setTitle(isDirty ? `* ${base}` : base);
+  });
 
   async function renderMarkdown(md: string) {
     const file = await unified()
@@ -35,6 +45,7 @@
     fileName = name;
     currentPath = path;
     markdown = content;
+    isDirty = false;
     await renderMarkdown(content);
   }
 
@@ -45,6 +56,7 @@
     }
     try {
       await invoke("save_file", { path: currentPath, content: markdown });
+      isDirty = false;
     } catch (e) {
       console.error(e);
     }
@@ -60,9 +72,11 @@
     const [name, path] = result;
     fileName = name;
     currentPath = path;
+    isDirty = false;
   }
 
   function handleChange(value: string) {
+    isDirty = true;
     renderMarkdown(value);
   }
 
@@ -76,6 +90,19 @@
       listen("menu:open", () => openFile()),
       listen("menu:save", () => saveFile()),
       listen("menu:save-as", () => saveFileAs()),
+      appWindow.onCloseRequested(async (event) => {
+        if (!isDirty) return;
+        event.preventDefault();
+        const shouldSave = await ask("未保存の変更があります。保存して閉じますか？", {
+          title: "確認",
+          okLabel: "保存",
+          cancelLabel: "破棄",
+        });
+        if (shouldSave) {
+          await saveFile();
+        }
+        await appWindow.destroy();
+      }),
     ]).then((fns) => unlistens.push(...fns));
     return () => unlistens.forEach((fn) => fn());
   });
@@ -83,9 +110,9 @@
 
 <div class="app">
   <header>
-    {#if fileName}
-      <span class="filename">{fileName}</span>
-    {/if}
+    <span class="filename">
+      {#if isDirty}* {/if}{fileName ?? "無題"}
+    </span>
     <div class="tabs">
       <button
         class="tab"
